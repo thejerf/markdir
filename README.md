@@ -64,5 +64,6 @@ through [bluemonday](https://github.com/microcosm-cc/bluemonday).
 Release History
 ===============
 
+  * v1.0.1: Internal rename to make this lint-clean by my gometalinter standards.
   * v1.0: Initial release.
 

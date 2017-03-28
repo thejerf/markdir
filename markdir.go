@@ -25,7 +25,7 @@ func main() {
 	}
 
 	httpdir := http.Dir(dir)
-	handler := Renderer{httpdir, http.FileServer(httpdir)}
+	handler := renderer{httpdir, http.FileServer(httpdir)}
 
 	fmt.Println("Serving", dir)
 	log.Fatal(http.ListenAndServe(*bind, handler))
@@ -42,12 +42,12 @@ var outputTemplate = template.Must(template.New("base").Parse(`
 </html>
 `))
 
-type Renderer struct {
+type renderer struct {
 	d http.Dir
 	h http.Handler
 }
 
-func (r Renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if strings.HasSuffix(req.URL.Path, ".md") {
 		f, err := r.d.Open(req.URL.Path)
 		if err != nil {
