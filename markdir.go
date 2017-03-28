@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"html"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -18,14 +18,29 @@ var bind = flag.String("bind", "127.0.0.1:19000", "port to run the server on")
 func main() {
 	flag.Parse()
 
-	dir, _ := os.Getwd()
-	fmt.Println("Serving", dir)
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatal("Couldn't get the current working dir from the os: " +
+			err.Error())
+	}
 
 	httpdir := http.Dir(dir)
 	handler := Renderer{httpdir, http.FileServer(httpdir)}
 
+	fmt.Println("Serving", dir)
 	log.Fatal(http.ListenAndServe(*bind, handler))
 }
+
+var outputTemplate = template.Must(template.New("base").Parse(`
+<html>
+  <head>
+    <title>{{ .Path }}</title>
+  </head>
+  <body>
+    {{ .Body }}
+  </body>
+</html>
+`))
 
 type Renderer struct {
 	d http.Dir
@@ -33,7 +48,6 @@ type Renderer struct {
 }
 
 func (r Renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	fmt.Println(req.URL.Path, "|--")
 	if strings.HasSuffix(req.URL.Path, ".md") {
 		f, err := r.d.Open(req.URL.Path)
 		if err != nil {
@@ -47,9 +61,14 @@ func (r Renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 		rw.Header().Set("Content-Type", "text/html")
 
-		_, _ = rw.Write([]byte("<html><head><title>" + html.EscapeString(req.URL.Path) + "</title></head><body>"))
-		_, _ = rw.Write(output)
-		_, _ = rw.Write([]byte("</body></html>"))
+		outputTemplate.Execute(rw, struct {
+			Path string
+			Body template.HTML
+		}{
+			Path: req.URL.Path,
+			Body: template.HTML(string(output)),
+		})
+
 		return
 	}
 
