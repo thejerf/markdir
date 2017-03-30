@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/russross/blackfriday"
@@ -18,16 +17,10 @@ var bind = flag.String("bind", "127.0.0.1:19000", "port to run the server on")
 func main() {
 	flag.Parse()
 
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal("Couldn't get the current working dir from the os: " +
-			err.Error())
-	}
-
-	httpdir := http.Dir(dir)
+	httpdir := http.Dir(".")
 	handler := renderer{httpdir, http.FileServer(httpdir)}
 
-	fmt.Println("Serving", dir)
+	fmt.Println("Serving")
 	log.Fatal(http.ListenAndServe(*bind, handler))
 }
 
@@ -48,29 +41,28 @@ type renderer struct {
 }
 
 func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	if strings.HasSuffix(req.URL.Path, ".md") {
-		f, err := r.d.Open(req.URL.Path)
-		if err != nil {
-			panic(err)
-		}
-		input, err := ioutil.ReadAll(f)
-		if err != nil {
-			panic(err)
-		}
-		output := blackfriday.MarkdownCommon(input)
-
-		rw.Header().Set("Content-Type", "text/html")
-
-		outputTemplate.Execute(rw, struct {
-			Path string
-			Body template.HTML
-		}{
-			Path: req.URL.Path,
-			Body: template.HTML(string(output)),
-		})
-
+	if !strings.HasSuffix(req.URL.Path, ".md") {
+		r.h.ServeHTTP(rw, req)
 		return
 	}
 
-	r.h.ServeHTTP(rw, req)
+	// net/http is already running a path.Clean on the req.URL.Path,
+	// so this is not a directory traversal, at least by my testing
+	input, err := ioutil.ReadFile("." + req.URL.Path)
+	if err != nil {
+		http.Error(rw, "Internal Server Error", 500)
+		log.Fatalf("Couldn't read path %s: %v", req.URL.Path, err)
+	}
+	output := blackfriday.MarkdownCommon(input)
+
+	rw.Header().Set("Content-Type", "text/html")
+
+	outputTemplate.Execute(rw, struct {
+		Path string
+		Body template.HTML
+	}{
+		Path: req.URL.Path,
+		Body: template.HTML(string(output)),
+	})
+
 }
