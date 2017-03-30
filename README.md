@@ -59,11 +59,27 @@ That said, I have this bind to localhost by default on purpose. I'd think
 twice about opening this up to the internet, because you should always
 think twice about that. If I were going to do that, I'd probably still take
 the step of running the output of blackfriday
-through [bluemonday](https://github.com/microcosm-cc/bluemonday).
+through [bluemonday](https://github.com/microcosm-cc/bluemonday). Call it a
+good exercise.
+
+[titpetric on /r/golang also mentions](https://www.reddit.com/r/golang/comments/626m0s/markdir_a_simple_but_nontrivial_nethttp_example/dflhjqr/) that
+if you were going to put something like this up on the Internet, you ought
+to use read, write, and idle timeouts. As those appeared in net/http in Go
+1.8, I've not put them in here.
 
 Release History
 ===============
 
+  * v1.0.2: Internal changes as suggested by Reddit.
   * v1.0.1: Internal rename to make this lint-clean by my gometalinter standards.
   * v1.0: Initial release.
 
+Other Simple Projects
+=====================
+
+  * [sonyflake](https://github.com/titpetric/sonyflake): A service for
+    generating sortable IDs. Note that repo has a lot more files because
+    it's all set up to be run in Docker, but the [actual Go code that
+    implements the service](https://github.com/titpetric/sonyflake/blob/master/main.go) is
+    comparable in size. sonyflake also has an example of dumping out
+    JSON.
