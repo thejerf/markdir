@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,21 +14,25 @@ import (
 )
 
 var bind = flag.String("bind", "127.0.0.1:8080", "port to run the server on")
+var contentRoot = flag.String("root", "~/vimwiki", "markdown files root dir")
+
 var (
-	CWD            string
 	TEMPLATE_DIR   string
 	STATIC_DIR     string
-	ContentRootDir string
 )
 
 func init() {
-	CWD, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	CodeRoot, err := GetCodeRoot()
 	if err != nil {
 		log.Fatalln(err)
 	}
-	TEMPLATE_DIR = filepath.Join(CWD, "templates")
-	STATIC_DIR = filepath.Join(CWD, "static")
-	ContentRootDir = "/Users/michaeltsui/vimwiki"
+	TEMPLATE_DIR = filepath.Join(CodeRoot, "templates")
+	STATIC_DIR = filepath.Join(CodeRoot, "static")
+
+	path := Expand(*contentRoot)
+	contentRoot = &path
+
+	fmt.Printf("CodeRoot: %v\nContentRoot: %v\n---\n", CodeRoot, *contentRoot)
 }
 
 type httpHandler struct {
@@ -49,15 +52,15 @@ func (r *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	isMarkdownFile := strings.HasSuffix(upath, ".md") || strings.HasSuffix(upath, ".markdown")
 	if !isMarkdownFile {
-		var isServed bool
-		upath, isServed = serveREADME(w, req, r.contentRoot, upath)
-		if !isServed {
+		var exist bool
+		upath, exist = getREADMEPath(w, req, r.contentRoot, upath)
+		if !exist {
 			r.fileServer.ServeHTTP(w, req)
 			return
 		}
 	}
 
-	path := filepath.Join(ContentRootDir, upath)
+	path := filepath.Join(string(r.contentRoot), upath)
 	input, err := ioutil.ReadFile(path)
 	if err != nil {
 		msg := fmt.Sprintf("Couldn't read path %s: %v", req.URL.Path, err)
@@ -67,7 +70,13 @@ func (r *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	output := blackfriday.Run(input)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	outputTemplate := template.Must(template.ParseFiles(filepath.Join(TEMPLATE_DIR, "base.html")))
+	outputTemplate, err := template.ParseFiles(filepath.Join(TEMPLATE_DIR, "base.html"))
+	if err != nil {
+		msg := fmt.Sprintf("err: %v", err)
+		http.Error(w, msg, http.StatusInternalServerError)
+		return
+	}
+
 	err = outputTemplate.Execute(w, struct {
 		Path string
 		Body template.HTML
@@ -75,14 +84,15 @@ func (r *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Path: req.URL.Path,
 		Body: template.HTML(string(output)),
 	})
-
 	if err != nil {
-		log.Fatalln(err)
+		msg := fmt.Sprintf("err: %v", err)
+		http.Error(w, msg, http.StatusInternalServerError)
+		return
 	}
 
 }
 
-func serveREADME(w http.ResponseWriter, r *http.Request, fs http.FileSystem, upath string) (string, bool) {
+func getREADMEPath(w http.ResponseWriter, r *http.Request, fs http.FileSystem, upath string) (string, bool) {
 	const indexPage = "/README.md"
 	index := strings.TrimSuffix(upath, "/") + indexPage
 	f, err := fs.Open(index)
@@ -102,7 +112,7 @@ func serveREADME(w http.ResponseWriter, r *http.Request, fs http.FileSystem, upa
 func main() {
 	flag.Parse()
 
-	markdownDir := http.Dir(ContentRootDir)
+	markdownDir := http.Dir(*contentRoot)
 	defaultHandler := NewDefaultHandler(markdownDir)
 
 	mux := http.NewServeMux()
@@ -111,6 +121,6 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler))
 	mux.Handle("/", defaultHandler)
 
-	fmt.Println("Serving on 127.0.0.1:8080")
+	fmt.Println("Serving on", *bind)
 	log.Fatal(http.ListenAndServe(*bind, mux))
 }
