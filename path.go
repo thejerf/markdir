@@ -58,3 +58,13 @@ func GetCodeRoot() (string, error) {
 
 	return pwd, nil
 }
+
+func GetContentRoot(contentRoot string) (string, error) {
+	path := Expand(contentRoot)
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
+}
