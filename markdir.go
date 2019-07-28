@@ -7,28 +7,18 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/gobuffalo/packr/v2"
-	"github.com/russross/blackfriday"
 )
 
-var bind = flag.String("bind", "127.0.0.1:8080", "port to run the server on")
-var contentRoot = flag.String("root", ".", "markdown files root dir")
-var staticBox = packr.New("static", "./static")
-var templateBox = packr.New("template", "./templates")
-
-func init() {
-	path := Expand(*contentRoot)
-	path, err := filepath.Abs(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	contentRoot = &path
-
-	fmt.Printf("ContentRoot: %v\n---\n", *contentRoot)
-}
+var (
+	bind        = flag.String("bind", "127.0.0.1:8080", "port to run the server on")
+	contentRoot = flag.String("root", ".", "markdown files root dir")
+	is_packr    = true
+)
 
 type httpHandler struct {
 	contentRoot http.Dir
@@ -42,47 +32,55 @@ func NewDefaultHandler(root http.Dir) http.Handler {
 	}
 }
 
+func getTemplate(tmplName string, debug bool) (*template.Template, error) {
+	if debug {
+		name := filepath.Join("templates", tmplName)
+		return template.ParseFiles(name)
+	} else {
+		templateBox := packr.New("template", "./templates")
+		baseHTML, err := templateBox.FindString(tmplName)
+		if err != nil {
+			return nil, err
+		}
+		return template.New("base").Parse(baseHTML)
+	}
+}
+
 func (r *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	upath := req.URL.Path
 
 	isMarkdownFile := strings.HasSuffix(upath, ".md") || strings.HasSuffix(upath, ".markdown")
 	if !isMarkdownFile {
 		var exist bool
-		upath, exist = getREADMEPath(w, req, r.contentRoot, upath)
+		upath, exist = getREADMEPath(upath, string(r.contentRoot))
 		if !exist {
 			r.fileServer.ServeHTTP(w, req)
 			return
 		}
 	}
 
-	path := filepath.Join(string(r.contentRoot), upath)
-	input, err := ioutil.ReadFile(path)
+	input, err := ioutil.ReadFile(upath)
 	if err != nil {
 		msg := fmt.Sprintf("Couldn't read path %s: %v", req.URL.Path, err)
 		http.Error(w, msg, http.StatusNotFound)
 		return
 	}
-	output := blackfriday.Run(input)
+
+	output := MarkDown(input)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	baseHTML, err := templateBox.FindString("base.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-	outputTemplate, err := template.New("base").Parse(baseHTML)
+	outputTemplate, err := getTemplate("base.html", is_packr)
 	if err != nil {
 		msg := fmt.Sprintf("err: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
 
-	err = outputTemplate.Execute(w, struct {
-		Path string
-		Body template.HTML
-	}{
-		Path: req.URL.Path,
-		Body: template.HTML(string(output)),
-	})
+	args := map[string]interface{}{
+		"Path": req.URL.Path,
+		"Body": template.HTML(string(output)),
+	}
+	err = outputTemplate.Execute(w, args)
 	if err != nil {
 		msg := fmt.Sprintf("err: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
@@ -91,35 +89,52 @@ func (r *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 }
 
-func getREADMEPath(w http.ResponseWriter, r *http.Request, fs http.FileSystem, upath string) (string, bool) {
-	const indexPage = "/README.md"
-	index := strings.TrimSuffix(upath, "/") + indexPage
-	f, err := fs.Open(index)
-	if err != nil {
-		return "", false
+func getREADMEPath(upath string, contentRoot string) (string, bool) {
+	for _, indexPage := range []string{
+		"README.md", "README.markdown",
+	} {
+		indexName := filepath.Join(contentRoot, upath, indexPage)
+		if _, err := os.Stat(indexName); err != nil {
+			if os.IsNotExist(err) {
+				return "", false
+			}
+		}
+
+		return indexName, true
 	}
 
-	defer f.Close()
-	_, err = f.Stat()
-	if err != nil {
-		return "", false
-	}
+	return "", false
+}
 
-	return index, true
+func logRequest(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s\n", r.Method, r.URL)
+		handler.ServeHTTP(w, r)
+	})
 }
 
 func main() {
 	flag.Parse()
+	root, err := GetContentRoot(*contentRoot)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	markdownDir := http.Dir(*contentRoot)
+	markdownDir := http.Dir(root)
 	defaultHandler := NewDefaultHandler(markdownDir)
 
 	mux := http.NewServeMux()
-	staticHandler := http.FileServer(staticBox)
+	var staticHandler http.Handler
+	if is_packr {
+		staticHandler = http.FileServer(http.Dir("static"))
+	} else {
+		staticBox := packr.New("static", "./static")
+		staticHandler = http.FileServer(staticBox)
+	}
 	mux.Handle("/favicon.ico", staticHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler))
 	mux.Handle("/", defaultHandler)
 
-	fmt.Println("Serving on", *bind)
-	log.Fatal(http.ListenAndServe(*bind, mux))
+	fmt.Printf("Serving %v on %v\n", *contentRoot, *bind)
+	log.Fatal(http.ListenAndServe(*bind, logRequest(mux)))
 }
