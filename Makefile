@@ -1,9 +1,9 @@
-.PHONY: bin install
+.PHONY: build install
 
 BIN_NAME="markdir"
 
-bin:
+build:
 	@go build -o ${BIN_NAME}
 
-install: bin
-	@cp ${BIN_NAME} ~/bin/
+install:
+	packr2 install

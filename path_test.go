@@ -18,7 +18,6 @@ func TestGetCodeRoot(t *testing.T) {
 	}
 }
 
-
 func TestGetCodeRootWithVariable(t *testing.T) {
 	targetPath := "/tmp"
 
@@ -31,6 +30,16 @@ func TestGetCodeRootWithVariable(t *testing.T) {
 	if err != nil {
 		t.Errorf("err %v != nil", err)
 	}
+
+	if path != targetPath {
+		t.Errorf("path %v != %v", path, targetPath)
+	}
+}
+
+func TestExpand(t *testing.T) {
+	targetPath, _ := os.Getwd()
+
+	path := Expand(".")
 
 	if path != targetPath {
 		t.Errorf("path %v != %v", path, targetPath)
