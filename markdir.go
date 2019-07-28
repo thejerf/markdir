@@ -10,29 +10,24 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gobuffalo/packr/v2"
 	"github.com/russross/blackfriday"
 )
 
 var bind = flag.String("bind", "127.0.0.1:8080", "port to run the server on")
-var contentRoot = flag.String("root", "~/vimwiki", "markdown files root dir")
-
-var (
-	TEMPLATE_DIR   string
-	STATIC_DIR     string
-)
+var contentRoot = flag.String("root", ".", "markdown files root dir")
+var staticBox = packr.New("static", "./static")
+var templateBox = packr.New("template", "./templates")
 
 func init() {
-	CodeRoot, err := GetCodeRoot()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	TEMPLATE_DIR = filepath.Join(CodeRoot, "templates")
-	STATIC_DIR = filepath.Join(CodeRoot, "static")
-
 	path := Expand(*contentRoot)
+	path, err := filepath.Abs(path)
+	if err != nil {
+		log.Fatal(err)
+	}
 	contentRoot = &path
 
-	fmt.Printf("CodeRoot: %v\nContentRoot: %v\n---\n", CodeRoot, *contentRoot)
+	fmt.Printf("ContentRoot: %v\n---\n", *contentRoot)
 }
 
 type httpHandler struct {
@@ -70,7 +65,11 @@ func (r *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	output := blackfriday.Run(input)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	outputTemplate, err := template.ParseFiles(filepath.Join(TEMPLATE_DIR, "base.html"))
+	baseHTML, err := templateBox.FindString("base.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	outputTemplate, err := template.New("base").Parse(baseHTML)
 	if err != nil {
 		msg := fmt.Sprintf("err: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
@@ -116,7 +115,7 @@ func main() {
 	defaultHandler := NewDefaultHandler(markdownDir)
 
 	mux := http.NewServeMux()
-	staticHandler := http.FileServer(http.Dir(STATIC_DIR))
+	staticHandler := http.FileServer(staticBox)
 	mux.Handle("/favicon.ico", staticHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler))
 	mux.Handle("/", defaultHandler)
