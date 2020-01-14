@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	astisub "github.com/asticode/go-astisub"
 	"github.com/russross/blackfriday"
 )
 
@@ -41,11 +42,26 @@ type renderer struct {
 }
 
 func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	if !strings.HasSuffix(req.URL.Path, ".md") {
+	lastPeriod := strings.LastIndex(req.URL.Path, ".")
+	if lastPeriod == -1 {
 		r.h.ServeHTTP(rw, req)
 		return
 	}
+	suffix := req.URL.Path[lastPeriod+1:]
 
+	switch suffix {
+	case "md":
+		r.ServeMarkdown(rw, req)
+
+	case "srt", "ssa", "ass", "st1", "ts", "ttml", "vtt":
+		r.ServeSubtitle(rw, req)
+
+	default:
+		r.h.ServeHTTP(rw, req)
+	}
+}
+
+func (r renderer) ServeMarkdown(rw http.ResponseWriter, req *http.Request) {
 	// net/http is already running a path.Clean on the req.URL.Path,
 	// so this is not a directory traversal, at least by my testing
 	input, err := ioutil.ReadFile("." + req.URL.Path)
@@ -64,5 +80,31 @@ func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		Path: req.URL.Path,
 		Body: template.HTML(string(output)),
 	})
+}
 
+func (r renderer) ServeSubtitle(rw http.ResponseWriter, req *http.Request) {
+	parsed, err := astisub.OpenFile("." + req.URL.Path)
+	if err != nil {
+		http.Error(rw, "Internal Server Error", 500)
+		log.Fatalf("Couldn't open path %s: %v", req.URL.Path, err)
+	}
+
+	b := []byte("<html><body>")
+
+	for _, item := range parsed.Items {
+		b = append(b, []byte("<p><b>")...)
+		b = append(b, []byte(item.StartAt.String())...)
+		b = append(b, []byte("</b>: ")...)
+		for _, line := range item.Lines {
+			for _, item := range line.Items {
+				b = append(b, []byte(item.Text)...)
+				b = append(b, 32)
+			}
+		}
+		b = append(b, []byte("</p>")...)
+	}
+
+	b = append(b, []byte("</body></html>")...)
+
+	_, _ = rw.Write(b)
 }
