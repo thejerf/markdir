@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -22,7 +21,7 @@ func main() {
 	httpdir := http.Dir(".")
 	handler := renderer{httpdir, http.FileServer(httpdir)}
 
-	fmt.Println("Serving")
+	log.Println("Serving on http://" + *bind)
 	log.Fatal(http.ListenAndServe(*bind, handler))
 }
 
