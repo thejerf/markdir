@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/russross/blackfriday"
@@ -48,11 +50,20 @@ func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	// net/http is already running a path.Clean on the req.URL.Path,
 	// so this is not a directory traversal, at least by my testing
+	var pathErr *os.PathError
 	input, err := ioutil.ReadFile("." + req.URL.Path)
-	if err != nil {
-		http.Error(rw, "Internal Server Error", 500)
-		log.Fatalf("Couldn't read path %s: %v", req.URL.Path, err)
+	if errors.As(err, &pathErr) {
+		http.Error(rw, http.StatusText(http.StatusNotFound)+": "+req.URL.Path, http.StatusNotFound)
+		log.Printf("file not found: %s", err)
+		return
 	}
+
+	if err != nil {
+		http.Error(rw, "Internal Server Error: "+err.Error(), 500)
+		log.Printf("Couldn't read path %s: %v (%T)", req.URL.Path, err, err)
+		return
+	}
+
 	output := blackfriday.MarkdownCommon(input)
 
 	rw.Header().Set("Content-Type", "text/html")
