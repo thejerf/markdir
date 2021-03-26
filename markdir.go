@@ -65,7 +65,7 @@ func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	output := blackfriday.MarkdownCommon(input)
 
-	rw.Header().Set("Content-Type", "text/html")
+	rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	outputTemplate.Execute(rw, struct {
 		Path string
