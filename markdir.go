@@ -42,7 +42,7 @@ type renderer struct {
 }
 
 func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	if !strings.HasSuffix(req.URL.Path, ".md") {
+	if !strings.HasSuffix(req.URL.Path, ".md") && !strings.HasSuffix(req.URL.Path, "/guide") {
 		r.h.ServeHTTP(rw, req)
 		return
 	}
