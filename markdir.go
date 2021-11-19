@@ -8,21 +8,40 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/russross/blackfriday"
 )
 
-var bind = flag.String("bind", "127.0.0.1:19000", "port to run the server on")
+const (
+	defaultBind = "127.0.0.1:19000"
+)
+
+var bind string
+var showVersion bool
+
+func init() {
+	flag.StringVar(&bind, "bind", defaultBind, "port to run the server on")
+
+	flag.BoolVar(&showVersion, "version", false, "show the version of markdir and exit")
+	flag.BoolVar(&showVersion, "v", false, "")
+}
 
 func main() {
 	flag.Parse()
 
+	if showVersion {
+		info, _ := debug.ReadBuildInfo()
+		log.Println(info.Main.Path, info.Main.Version)
+		os.Exit(0)
+	}
+
 	httpdir := http.Dir(".")
 	handler := renderer{httpdir, http.FileServer(httpdir)}
 
-	log.Println("Serving on http://" + *bind)
-	log.Fatal(http.ListenAndServe(*bind, handler))
+	log.Println("Serving on http://" + bind)
+	log.Fatal(http.ListenAndServe(bind, handler))
 }
 
 var outputTemplate = template.Must(template.New("base").Parse(`
