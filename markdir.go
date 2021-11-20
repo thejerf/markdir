@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/russross/blackfriday"
+	"github.com/russross/blackfriday/v2"
 )
 
 const (
@@ -82,7 +82,7 @@ func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	output := blackfriday.MarkdownCommon(input)
+	output := blackfriday.Run(input)
 
 	rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 
