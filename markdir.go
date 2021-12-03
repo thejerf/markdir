@@ -14,11 +14,12 @@ import (
 )
 
 var bind = flag.String("bind", "127.0.0.1:19000", "port to run the server on")
+var dir = flag.String("dir", ".", "server root directory")
 
 func main() {
 	flag.Parse()
 
-	httpdir := http.Dir(".")
+	httpdir := http.Dir(*dir)
 	handler := renderer{httpdir, http.FileServer(httpdir)}
 
 	log.Println("Serving on http://" + *bind)
@@ -50,7 +51,7 @@ func (r renderer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// net/http is already running a path.Clean on the req.URL.Path,
 	// so this is not a directory traversal, at least by my testing
 	var pathErr *os.PathError
-	input, err := ioutil.ReadFile("." + req.URL.Path)
+	input, err := ioutil.ReadFile(string(r.d) + req.URL.Path)
 	if errors.As(err, &pathErr) {
 		http.Error(rw, http.StatusText(http.StatusNotFound)+": "+req.URL.Path, http.StatusNotFound)
 		log.Printf("file not found: %s", err)
