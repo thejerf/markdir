@@ -3,45 +3,40 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"strings"
 
 	"github.com/russross/blackfriday/v2"
 )
 
-const (
-	defaultBind = "127.0.0.1:19000"
-)
+// build variables set via -ldflags in Makefile
+var BuildVersion string = "<unknown>"
+var BuildTime string = "<unknown>"
 
-var bind string
-var showVersion bool
-
-func init() {
-	flag.StringVar(&bind, "bind", defaultBind, "port to run the server on")
-
-	flag.BoolVar(&showVersion, "version", false, "show the version of markdir and exit")
-	flag.BoolVar(&showVersion, "v", false, "")
-}
+var bind = flag.String("bind", "127.0.0.1:19000", "port to run the server on")
+var showVersion = flag.Bool("v",false, "display version information and exit")
 
 func main() {
 	flag.Parse()
 
-	if showVersion {
+	if *showVersion {
 		info, _ := debug.ReadBuildInfo()
-		log.Println(info.Main.Path, info.Main.Version)
+		fmt.Printf("%s %s (%s %s built %s)\n", info.Main.Path, BuildVersion, runtime.GOOS, runtime.GOARCH, BuildTime)
 		os.Exit(0)
 	}
 
 	httpdir := http.Dir(".")
 	handler := renderer{httpdir, http.FileServer(httpdir)}
 
-	log.Println("Serving on http://" + bind)
-	log.Fatal(http.ListenAndServe(bind, handler))
+	log.Println("Serving on http://" + *bind)
+	log.Fatal(http.ListenAndServe(*bind, handler))
 }
 
 var outputTemplate = template.Must(template.New("base").Parse(`
