@@ -70,6 +70,7 @@ to use read, write, and idle timeouts. As those appeared in net/http in Go
 Release History
 ===============
 
+  * v1.0.3: update to blackfriday v2, add -v to display version
   * v1.0.2: Internal changes as suggested by Reddit.
   * v1.0.1: Internal rename to make this lint-clean by my gometalinter standards.
   * v1.0: Initial release.
