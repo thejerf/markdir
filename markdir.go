@@ -43,6 +43,7 @@ var outputTemplate = template.Must(template.New("base").Parse(`
 <html>
   <head>
     <title>{{ .Path }}</title>
+	<link rel="stylesheet" href="index.css">
   </head>
   <body>
     {{ .Body }}
